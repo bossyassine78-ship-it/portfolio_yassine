@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1" name="viewport"/><meta content="dark" name="color-scheme"/><title>Authorization Boundaries | YASSINE</title><meta content="Original reproducible localhost API lab with BOLA, BFLA and account state authorization examples." name="description"/><link href="../assets/favicon.svg" rel="icon" type="image/svg+xml"/><link href="../assets/style.css" rel="stylesheet"/><script defer="" src="../assets/app.js"></script></head>
+<body><header class="site-header"><div class="wrap header-inner"><a class="brand" href="../index.html"><span class="brand-mark">S</span><span>YASSINE.</span></a><button aria-controls="site-nav" aria-expanded="false" aria-label="Toggle navigation" class="menu-toggle">Menu ☰</button><nav class="nav" id="site-nav"><a href="../index.html#research">Research</a><a href="../index.html#projects">Projects</a><a href="some-of-my-losses-one-win.html">Field notes</a></nav></div></header>
+<main class="wrap article-layout"><article class="article"><div class="eyebrow">ORIGINAL REPRODUCIBLE LAB / 001</div><h1>Authentication isn't authorization.</h1><p class="article-lead">A deliberately broken, localhost-only Python API demonstrates three separate trust boundaries with actual HTTP requests, expected results and fixed-mode checks.</p><div class="article-meta"><span>Python 3</span><span>HTTP</span><span>Object and function authorization</span></div><div class="note">All tokens, users, requests and responses below are fictional and are generated locally. This is not a reproduction of a private program's endpoints or a claim about a real target.</div>
+<h2>01 / Object ownership (BOLA)</h2><p>Alice possesses a valid demo token. She requests Bob's order. The vulnerable implementation checks only that the token maps to an account, not that the account owns the object.</p><div class="code">GET /api/orders/4002 HTTP/1.1
+Host: 127.0.0.1:8765
+Authorization: Bearer alice-demo-token
+
+VULNERABLE: HTTP 200
+{"order":{"owner":"bob","item":"Keyboard","total":60}}
+
+FIXED: HTTP 404
+{"error":"NOT_FOUND"}</div><p><strong>Correct invariant:</strong> the caller must be the resource owner or an explicitly authorized administrator. Possession of any valid token is insufficient.</p>
+<h2>02 / Function-level access (BFLA)</h2><p>An ordinary member attempts an administrative invitation operation.</p><div class="code">POST /api/admin/invitations HTTP/1.1
+Host: 127.0.0.1:8765
+Authorization: Bearer alice-demo-token
+Content-Type: application/json
+
+{"email":"candidate@lab.invalid"}
+
+VULNERABLE: HTTP 201, invitation.role = "admin"
+FIXED: HTTP 403, {"error":"FORBIDDEN"}</div><p><strong>Correct invariant:</strong> authorization to call a privileged function must be evaluated for that function, independent of login state. This is not a mass-assignment example.</p>
+<h2>03 / Stale identity state</h2><p>After the account is marked deleted, an old demo token is reused. The vulnerable implementation continues treating the historical token as authority. Fixed mode checks the current account state.</p><div class="code">DELETE /api/me
+Authorization: Bearer alice-demo-token
+
+HTTP 200
+{"deleted":"alice"}
+
+GET /api/me
+Authorization: Bearer alice-demo-token
+
+VULNERABLE: HTTP 200, deleted = true
+FIXED: HTTP 401, {"error":"UNAUTHENTICATED"}</div><p><strong>Impact limitation:</strong> a stale token replay is an account-lifecycle authorization problem, but does not establish a remotely exploitable takeover without an attacker-accessible token acquisition path.</p>
+<h2>Run, replay, refute</h2><p>Run the API in both modes and verify the same requests yield different authorization outcomes. The project includes repeatable test assertions against real localhost HTTP responses.</p><div class="code">cd labs/authz-lab
+python3 server.py --mode vulnerable
+
+# In a separate terminal, from the same directory:
+python3 -m unittest -v test_lab.py
+
+# Stop the server and compare:
+python3 server.py --mode fixed</div><p>The tests automatically launch their own temporary server, so they can also run without the manually launched instance.</p><div class="actions"><a class="btn btn-primary" href="../labs/authz-lab/README.md">Read full commands →</a><a class="btn btn-secondary" href="some-of-my-losses-one-win.html">Field notes ↗</a></div>
+<p><a href="sample-api-assessment.html">Read the full structured lab assessment →</a></p></article><aside class="aside"><div class="aside-box sticky"><h3>Case coverage</h3><ul><li>Account state</li><li>Object authorization</li><li>Function authorization</li><li>Raw HTTP</li><li>Automated tests</li></ul><p>Source files are included in the site repository.</p></div></aside></main><footer class="wrap footer"><a class="brand" href="../index.html"><span class="brand-mark">S</span><span>YASSINE.</span></a><p>Evidence over claims.</p></footer></body></html>

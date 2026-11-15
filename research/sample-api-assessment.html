@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><meta content="#10111b" name="theme-color"/><meta content="Sample security assessment of an original, fictional, localhost-only API with reproductions, evidence boundaries, fixes and regression tests." name="description"/><title>Authorization Testing Lab | YASSINE</title><link href="../assets/favicon.svg" rel="icon" type="image/svg+xml"/><link href="../assets/style.css" rel="stylesheet"/><script defer="" src="../assets/app.js"></script></head><body>
+
+<header class="site-header"><div class="wrap header-inner"><a aria-label="Homepage" class="brand" href="../index.html"><span class="brand-mark">S</span><span>YASSINE<span style="color:var(--teal)">.</span></span></a><button aria-controls="site-nav" aria-expanded="false" aria-label="Toggle navigation" class="menu-toggle">Menu ☰</button><nav class="nav" id="site-nav"><a href="../index.html#research">Research</a><a href="../index.html#field-notes">Field notes</a><a href="../index.html#projects">Projects</a><a href="../index.html#work-sample">Work sample</a></nav></div></header>
+<main class="wrap report"><div class="report-intro"><div class="eyebrow">YASSINE / LAB ASSESSMENT / 001</div><h1>Authorization assessment: complete technical lab report.</h1><p class="article-lead">A client-facing report format, applied to a deliberately vulnerable fictional API. This page shows what was tested, the precise evidence, what it does and does not prove, and how a fix is verified.</p><div class="report-pills"><span>Python 3</span><span>HTTP API</span><span>Localhost only</span><span>3 test cases</span></div></div>
+<section class="report-summary"><div class="eyebrow">Executive summary</div><h2>Three authorization boundaries failed in vulnerable mode.</h2><p>This exercise covers object access control, role-restricted operations and credential validity after account deletion. The supplied regression suite checks these deliberately introduced defects against corrected behavior using actual local HTTP calls.</p><div class="report-stats"><div><b>03</b><span>Findings in synthetic lab</span></div><div><b>02</b><span>Mode regression tests passing</span></div><div><b>00</b><span>Real systems assessed</span></div></div><p class="report-note"><strong>Important:</strong> Risk labels describe this fictional test model only. They are not production CVSS scores, and this exercise is not evidence of a vulnerability at any real organization.</p></section>
+<section class="report-scope"><div class="eyebrow">Scope &amp; method</div><div class="report-columns"><div><h3>Tested surface</h3><p><code>127.0.0.1:8765</code> with synthetic accounts Alice, Bob and Admin; fake token strings; orders <code>4001</code> and <code>4002</code>; admin invitation endpoint.</p></div><div><h3>Testing method</h3><p>Establish a control identity, replay endpoint calls with a second identity, inspect response status and payload, change account state, then repeat in <code>--mode fixed</code>.</p></div></div><p class="report-note">No production hosts, confidential report exports, actual credentials, or third-party user information were used to build this sample.</p></section>
+<div class="report-toc"><strong>Findings</strong><a href="#as-01">AS-01 · BOLA</a><a href="#as-02">AS-02 · BFLA</a><a href="#as-03">AS-03 · Session lifecycle</a></div>
+<section class="report-finding" id="as-01">
+<div class="report-finding-top"><span>AS-01 / BOLA / IDOR</span><span class="risk">HIGH (LAB)</span></div>
+<h2>Object-level authorization</h2><p class="finding-summary">An authenticated member reads an order belonging to another member.</p>
+<h3>Proof: request</h3><pre class="report-code"><code>GET /api/orders/4002 HTTP/1.1
+Host: 127.0.0.1:8765
+Authorization: Bearer alice-demo-token</code></pre><h3>Observed response (vulnerable mode)</h3><pre class="report-code"><code>HTTP/1.0 200 OK
+Content-Type: application/json
+
+{"order":{"owner":"bob","item":"Keyboard","total":60}}</code></pre>
+<h3>Expected response (fixed mode)</h3><pre class="report-code"><code>HTTP/1.0 404 Not Found
+
+{"error":"NOT_FOUND"}</code></pre>
+<h3>Security impact and evidence limit</h3><p>An authenticated Alice can inspect Bob’s order without being its owner. In a real application, impact depends on actual data sensitivity and identifier accessibility.</p>
+<h3>Remediation</h3><p>Apply a server-side authorization decision to the fetched object: order.owner == principal, or a narrowly defined administrative permission. Do not rely on UI visibility.</p><h3>Verification</h3><p>Run the same request under both modes. Alice should receive 404 in fixed mode, Bob should receive 200.</p>
+</section><section class="report-finding" id="as-02">
+<div class="report-finding-top"><span>AS-02 / BFLA</span><span class="risk">HIGH (LAB)</span></div>
+<h2>Function-level authorization</h2><p class="finding-summary">A non-admin member can create an admin invitation.</p>
+<h3>Proof: request</h3><pre class="report-code"><code>POST /api/admin/invitations HTTP/1.1
+Host: 127.0.0.1:8765
+Authorization: Bearer alice-demo-token
+Content-Type: application/json
+
+{"email":"demo@lab.invalid"}</code></pre><h3>Observed response (vulnerable mode)</h3><pre class="report-code"><code>HTTP/1.0 201 Created
+
+{"invitation":{"id":1,"email":"demo@lab.invalid","role":"admin","created_by":"alice"}}</code></pre>
+<h3>Expected response (fixed mode)</h3><pre class="report-code"><code>HTTP/1.0 403 Forbidden
+
+{"error":"FORBIDDEN"}</code></pre>
+<h3>Security impact and evidence limit</h3><p>An authenticated non-admin can create an invitation carrying the administrator role in the fictional application. The lab does not implement invitation redemption, so actual privilege escalation through invitation acceptance is not demonstrated.</p>
+<h3>Remediation</h3><p>Require role/permission checks in the server-side invitation handler, not just token presence. Restrict invited roles and validate the requested authority.</p><h3>Verification</h3><p>Normal member gets 403 in fixed mode; admin-demo-token still gets 201.</p>
+</section><section class="report-finding" id="as-03">
+<div class="report-finding-top"><span>AS-03 / ACCOUNT STATE</span><span class="risk">MEDIUM (LAB)</span></div>
+<h2>Session lifecycle invalidation</h2><p class="finding-summary">A deleted account’s credential still authorizes account reads.</p>
+<h3>Proof: request</h3><pre class="report-code"><code>DELETE /api/me HTTP/1.1
+Authorization: Bearer alice-demo-token
+
+GET /api/me HTTP/1.1
+Authorization: Bearer alice-demo-token</code></pre><h3>Observed response (vulnerable mode)</h3><pre class="report-code"><code>HTTP/1.0 200 OK
+
+{"name":"alice","role":"member","deleted":true}</code></pre>
+<h3>Expected response (fixed mode)</h3><pre class="report-code"><code>HTTP/1.0 401 Unauthorized
+
+{"error":"UNAUTHENTICATED"}</code></pre>
+<h3>Security impact and evidence limit</h3><p>The same bearer credential remains accepted after an authenticated account deletion. This is an account-lifecycle authorization failure, not proof of third-party token acquisition or account takeover.</p>
+<h3>Remediation</h3><p>Bind authenticated identities to current account state; invalidate or revoke session credentials during deletion and repeat the check on every protected operation.</p><h3>Verification</h3><p>Delete Alice in a fresh server instance, then request /api/me with the same credential: expect 401 in fixed mode.</p>
+</section>
+<section class="report-conclusion"><div class="eyebrow">Verification &amp; delivery</div><h2>Reproduce it yourself.</h2><p>Run the included <code>labs/authz-lab/</code> project locally. The same tests exercise both the vulnerable and fixed modes, with no external dependencies.</p><pre class="report-code"><code>cd labs/authz-lab
+python3 -m unittest -v test_lab.py
+
+# Manual comparison
+python3 server.py --mode vulnerable
+# stop with Ctrl+C, then
+python3 server.py --mode fixed</code></pre>
+<p>The deliverable format used here is: <strong>scope → invariant → request → response → observed behavior → realistic impact → remediation → retest.</strong> For a real assessment, severity and final conclusions would depend on verified access paths, business context and the customer’s authorization.</p><div class="actions"><a class="btn btn-primary" href="technical-authz-lab.html">See technical write-up ↗</a><a class="btn btn-secondary" href="../index.html">Back to portfolio →</a></div></section>
+</main><footer class="wrap footer"><a class="brand" href="../index.html"><span class="brand-mark">S</span>YASSINE.</a><p>Original educational lab. Explicit evidence boundaries.</p></footer></body></html>

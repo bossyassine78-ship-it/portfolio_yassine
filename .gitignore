@@ -3,3 +3,16 @@ __pycache__/
 .DS_Store
 *.swp
 .vscode/
+
+# Keep private research material and downloaded report exports out of Git
+/private_sources/
+**/private_sources/
+/yassine_editorial_portfolio_PRIVATE/
+**/*_PRIVATE/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx

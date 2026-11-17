@@ -1,0 +1,40 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f0e8"><meta name="description" content="An original localhost authorization lab: object access, role checks, and token reuse after account deletion, by Yassine."><title>When a Token Outlives Its Authority | Yassine</title><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="../assets/editorial.css"></head><body><header class="topbar"><div class="navline"><a href="../index.html" class="logo"><span class="logo-seal">Y.</span><span>YASSINE <small>/ FIELD NOTES</small></span></a><nav><a href="../notes.html">Notes</a><a href="../services.html">Services</a><a href="../contact.html">Contact</a><a href="https://github.com/bossyassine78-ship-it" target="_blank" rel="noopener noreferrer">GitHub ↗</a></nav></div></header><main class="story-shell"><div class="story-head"><a class="back" href="../index.html#writing">← ALL FIELD NOTES</a><div class="label-line"><span class="eyebrow">ENGINEERING / AUTHORIZATION</span><span class="serial">LAB REPORT — 001</span></div><h1>When a token outlives its authority.</h1><p class="deck">Three broken trust boundaries inside a small Python HTTP API: an object read by the wrong account, a member performing an admin action, and a deleted user whose old token still works.</p><div class="byline"><div class="author-monogram">Y.</div><div><b>Yassine · Shemkar</b><span>Original experiment · Python / HTTP</span></div></div><div class="story-status"><span>RESEARCH TYPE <b>LOCAL LAB</b></span><span>SCENARIOS <b>03</b></span><span>PRODUCTION TARGETS <b>NONE</b></span></div></div>
+<div class="story-layout"><aside class="story-rail"><div class="rail-sticky"><span class="rail-heading">IN THIS STORY</span><a href="#setup">The setup</a><a href="#objects">Object ownership</a><a href="#functions">Role boundaries</a><a href="#lifecycle">Session lifecycle</a><a href="#retest">Fix and retest</a><a href="#limits">What it proves</a></div></aside><article class="story-body">
+<p class="opening-drop">A request can carry a valid credential and still be unauthorized. That distinction is easy to write down and surprisingly easy to miss when a handler checks only whether a token exists.</p><p>I built an intentionally vulnerable local API to make that distinction visible through HTTP, not just diagrams. There are three fictional identities, a handful of endpoints, and two server modes: vulnerable and fixed.</p><div class="observe"><strong>SCOPE AND EVIDENCE</strong><p>Every account, credential, object, request and response in this article belongs to a deliberately fictional localhost application. This is not an assessment of a real client or a reproduction of any confidential bug bounty endpoint.</p></div>
+<section class="story-section" id="setup"><span class="kicker">01 / EXPERIMENT</span><h2>Define the boundary before testing it.</h2><p>The experiment asks three concrete questions: can Alice read Bob's order? Can an ordinary member create an administrative invitation? Can a deleted account continue to authorize requests with an earlier token?</p><div class="facts"><div><small>RUNTIME</small><strong>Python 3 / standard library</strong></div><div><small>SERVER</small><strong>127.0.0.1:8765</strong></div><div><small>MODES</small><strong>Vulnerable / fixed</strong></div></div></section>
+<section class="story-section" id="objects"><span class="kicker">02 / OBJECT OWNERSHIP</span><h2>Authenticated as Alice. Reading Bob's order.</h2><p>In the vulnerable handler, a recognized token is enough. It does not enforce that the requester owns the order. In fixed mode, the resource is accessible only to its owner or an authorized administrator.</p><figure class="codefigure"><figcaption>HTTP REQUEST / BOLA</figcaption><pre><code>GET /api/orders/4002 HTTP/1.1
+Host: 127.0.0.1:8765
+Authorization: Bearer alice-demo-token
+
+VULNERABLE: HTTP 200
+{"order":{"owner":"bob","item":"Keyboard","total":60}}
+
+FIXED: HTTP 404
+{"error":"NOT_FOUND"}</code></pre></figure><p>The key observation is not the status code alone. It's that the authorization decision changes when object ownership is checked.</p></section>
+<section class="story-section" id="functions"><span class="kicker">03 / FUNCTION AUTHORIZATION</span><h2>A valid member shouldn't create admin invitations.</h2><p>The second test invokes an endpoint intended for an administrator using Alice's member credential. A vulnerable implementation checks that the request is authenticated but does not require the right role.</p><figure class="codefigure"><figcaption>HTTP REQUEST / BFLA</figcaption><pre><code>POST /api/admin/invitations HTTP/1.1
+Host: 127.0.0.1:8765
+Authorization: Bearer alice-demo-token
+Content-Type: application/json
+
+{"email":"candidate@lab.invalid"}
+
+VULNERABLE: HTTP 201, invitation.role = "admin"
+FIXED: HTTP 403, {"error":"FORBIDDEN"}</code></pre></figure><p>This is broken function-level authorization, not a mass-assignment example. The control is the permission to call the operation itself.</p></section>
+<section class="story-section" id="lifecycle"><span class="kicker">04 / ACCOUNT STATE</span><h2>The account is gone. The token isn't.</h2><p>The third case exercises a token after the account is marked deleted. The broken implementation trusts the historical token record without evaluating current account state. The fixed version rejects it.</p><figure class="codefigure"><figcaption>HTTP REQUEST / ACCOUNT LIFECYCLE</figcaption><pre><code>DELETE /api/me
+Authorization: Bearer alice-demo-token
+
+HTTP 200
+{"deleted":"alice"}
+
+GET /api/me
+Authorization: Bearer alice-demo-token
+
+VULNERABLE: HTTP 200, deleted = true
+FIXED: HTTP 401, {"error":"UNAUTHENTICATED"}</code></pre></figure></section>
+<section class="story-section" id="retest"><span class="kicker">05 / REGRESSION</span><h2>Reproduce, change the rule, replay.</h2><p>The project includes automated tests that start temporary localhost servers and assert behavior in both modes. Replaying the same operation against the fixed mode makes the intended policy explicit.</p><figure class="codefigure"><figcaption>REPRODUCE LOCALLY</figcaption><pre><code>cd labs/authz-lab
+python3 -m unittest -v test_lab.py
+
+# Optional interactive server:
+python3 server.py --mode vulnerable
+# Restart with --mode fixed to compare</code></pre></figure><p><a class="inline-link" href="../labs/authz-lab/README.md">Read the laboratory instructions ↗</a> · <a class="inline-link" href="sample-api-assessment.html">Read the structured technical assessment ↗</a></p></section>
+<section class="story-section" id="limits"><span class="kicker">06 / LIMITATIONS</span><h2>What the experiment does not prove.</h2><p>The demo tokens are intentionally unprotected strings. The example does not demonstrate a remotely exploitable account takeover, an attack on a real organization, or any production severity rating. In a real system, token acquisition, expiry, revocation, role evaluation and concurrency would require additional evidence.</p><div class="observe"><strong>THE LESSON</strong><p>An HTTP 200 is an observation, not a security conclusion. The useful question is which authority the application actually checked, and which authority the operation required.</p></div></section></article></div><div class="endnav"><a href="index.html">← Research archive</a><a href="../index.html">Homepage ↗</a></div></main><footer class="foot"><div class="foot-wrap"><span>YASSINE / FIELD NOTES</span><span>Evidence, before confidence. © 2026</span></div></footer></body></html>

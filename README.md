@@ -4,7 +4,7 @@
 
 A no-build technical portfolio collecting independent application-security investigations, reproducible labs, and C projects.
 
-**Website (after GitHub Pages deployment):** https://bossyassine78-ship-it.github.io/portfolio_yassine/
+**Website:** https://bossyassine78-ship-it.github.io/portfolio_yassine/
 
 ## Research
 
@@ -51,3 +51,10 @@ Production targets, report IDs, private cookies or credentials, and raw traffic 
 ## Source layout
 
 `index.html` homepage · `research/` investigations and technical reports · `labs/` runnable exercises · `assets/` visual style and JavaScript.
+
+
+## Contact & services
+
+The public site includes `notes.html`, `services.html` and `contact.html` with the editorial design. The contact form is plain HTML, posting to FormSubmit. FormSubmit requires a **one-time destination-email confirmation** after the first submission before email notifications start. The target address is present in the public HTML source. It can later be replaced with FormSubmit's random alias to avoid exposing the email in markup. Keep CAPTCHA on to reduce bot spam.
+
+Do **not** commit private bounty report exports, screenshots, attachments, credentials, session tokens, or original program-specific evidence to this public repository. Deleting files from the branch does not erase old Git history; any past exposure requires a separate history-remediation assessment.
